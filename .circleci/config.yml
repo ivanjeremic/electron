@@ -217,7 +217,7 @@ step-gclient-sync: &step-gclient-sync
           $GCLIENT_EXTRA_ARGS \
           "$CIRCLE_REPOSITORY_URL"
 
-        if [ ! gclient sync --with_branch_heads --with_tags ]; then
+        if ! gclient sync --with_branch_heads --with_tags; then
           if ELECTRON_USE_THREE_WAY_MERGE_FOR_PATCHES=1 gclient sync --with_branch_heads --with_tags; then
             # Re-export all the new patches now that they've been nicely 3-way
             # merged
