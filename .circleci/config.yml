@@ -217,7 +217,34 @@ step-gclient-sync: &step-gclient-sync
           $GCLIENT_EXTRA_ARGS \
           "$CIRCLE_REPOSITORY_URL"
 
-        gclient sync --with_branch_heads --with_tags
+        if [ ! gclient sync --with_branch_heads --with_tags ]; then
+          if ELECTRON_USE_THREE_WAY_MERGE_FOR_PATCHES=1 gclient sync --with_branch_heads --with_tags; then
+            # Re-export all the new patches now that they've been nicely 3-way
+            # merged
+            python src/electron/script/export_all_patches.py src/electron/patches/config.json
+            # Make a git commit with the updated patches
+            git -C src/electron add patches
+            GIT_COMMITTER_NAME="Electron Bot" GIT_COMMITTER_EMAIL="anonymous@electronjs.org" git commit -m "update patches" --author="Electron Bot <anonymous@electronjs.org>"
+            # Export it
+            mkdir -p patches
+            git -C src/electron am -1 --stdout --keep-subject --no-stat --full-index > patches/update-patches.patch
+            # Upload it to artifacts
+            echo
+            echo "======================================================================"
+            echo "Sync failed with non-3way patch application, but succeeded with 3way."
+            echo "Check the CI artifacts for a patch you can apply to fix it."
+            echo "======================================================================"
+            echo
+          else
+            echo
+            echo "======================================================================"
+            echo "Sync failed even with 3way patch application. You'll need to resolve"
+            echo "this conflict locally."
+            echo "======================================================================"
+            echo
+          fi
+          exit 1
+        fi
       fi
 
 step-setup-env-for-build: &step-setup-env-for-build
@@ -764,6 +791,8 @@ steps-checkout-fast: &steps-checkout-fast
     - *step-set-git-cache-path
     # This sync call only runs if .circle-sync-done is an EMPTY file
     - *step-gclient-sync
+    - store_artifacts:
+        path: patches
     # These next few steps reset Electron to the correct commit regardless of which cache was restored
     - run:
         name: Wipe Electron
